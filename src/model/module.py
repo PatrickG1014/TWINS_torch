@@ -4,31 +4,31 @@ from torch import nn
 
 class FM(nn.Module):
     '''
-    FM (Factorization Machine)
+    A FM (Factorization Machine) module.
     '''
     def __init__(self, w1, v, point_wise=True):
         super().__init__()
         self.point_wise = point_wise
-        self.W0 = torch.randn(1)
+        self.W0 = torch.randn(1, requires_grad=True)
         self.W1 = w1 # W1: (n, 1) first-order linear part embedding
         self.V = v   # V: (n, embedding_size) second-order interaction embedding
     
     def forward(self, input):
-        # input: (batch_size, n), n is the num of fields
+        # input: (batch_size, num), num is the num of fields
         linear_part = self.W1(input).sum(dim=-2) + self.W0 # (batch_size, 1)
-        x = self.V(input) # (batch_size, n, embedding_size)
+        x = self.V(input) # (batch_size, num, embedding_size)
         interaction_part_1 = torch.pow(x.sum(dim=-2), 2) # (batch_size, embedding_size)
         interaction_part_2 = torch.pow(x, 2).sum(dim=-2)
         product_part = interaction_part_1 - interaction_part_2
         if self.point_wise:
             product_part = product_part.sum(dim=-1, keepdim=True) # (batch_size, 1)
-        output = linear_part + 0.5 * product_part
+        output = linear_part + 0.5*product_part
         return output
 
 
 class PNN(nn.Module):
     '''
-    PNN: embedding layer + product layer
+    A PNN module. (embedding layer + product layer)
     '''
     def __init__(self, w1, v):
         super().__init__()
@@ -45,10 +45,30 @@ class PNN(nn.Module):
         return output
 
 
+class PredictMLP(nn.Module):
+    '''
+    A MLP module for predicting.
+    '''
+    def __init__(self, in_features, prediction_hidden_width, keep_prob):
+        super().__init__()
+        self.dropout = nn.Dropout(p=1-keep_prob)
+        self.activate = nn.LeakyReLU()
+        self.mlp = nn.Sequential()
+        i = 0
+        for width in prediction_hidden_width:
+            self.mlp.add_module(f"MLP_{i}", nn.Linear(in_features, width))
+            self.mlp.add_module(f"DropOut_{i}", self.dropout)
+            self.mlp.add_module(f"Activate_{i}", self.activate)
+            i += 1
+    
+    def forward(self, input):
+        return self.mlp(input)
+
+
 if __name__ == "__main__":
     n, k = 5, 3
-    w1 = nn.Embedding.from_pretrained(torch.randn(n, 1))
-    v = nn.Embedding.from_pretrained(torch.randn(n, k))
+    w1 = nn.Embedding.from_pretrained(torch.randn(n, 1, requires_grad=True))
+    v = nn.Embedding.from_pretrained(torch.randn(n, k, requires_grad=True))
     pnn = PNN(w1, v)
     input = torch.rand(10, 10) * n
     input = input.int()
