@@ -1,8 +1,6 @@
 import torch
-import numpy as np
 from torch import nn, optim
 from tensorboardX import SummaryWriter
-from sklearn.metrics import roc_auc_score
 
 from model.module import FM, PNN, PredictMLP
 
@@ -18,7 +16,7 @@ class PredictModel(nn.Module):
         self.V = nn.Embedding.from_pretrained(torch.normal(0, 1e-3, (self.max_features, self.embedding_size), requires_grad=True))
         
         self.model = self.get_model()
-        self.optimizer = optim.Adam(self.model.parameters(), self.lr)
+        self.optimizer = optim.Adam(self.model.parameters(), self.lr, weight_decay=self.l2_reg)
         self.scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, 0.7 ** (1/self.decay_step))
         self.writer = SummaryWriter()
 
@@ -32,21 +30,5 @@ class PredictModel(nn.Module):
             model.add_module("Linear", nn.Linear(self.prediction_hidden_width[-1], 1))
         return model
 
-    def get_loss_and_metrics(self, y, y_hat, is_training):
-        y_hat = torch.sigmoid(y_hat)
-        base_loss_fn = nn.BCELoss(reduction="mean")
-        base_loss = base_loss_fn(y_hat, y)
-        loss = base_loss
-        for name, param in self.model.named_parameters():
-            if not (name.endswith("bias") or "bn" in name): # only consider W
-                loss += torch.sum(param.pow(2)) / 2
-        
-        threshold = 0.5
-        ones, zeros = torch.ones_like(y), torch.zeros_like(y)
-        y_hat_int = np.where(y_hat >= threshold, ones, zeros)
-        eval_metrics = {
-            "auc": roc_auc_score(y, y_hat), # what about the shape of y?
-            "acc": np.sum(y_hat_int == y) / len(y), # whether to add "axis"?
-        }
-        return base_loss, loss, eval_metrics
-
+    def forward(self, input):
+        return self.model(input)

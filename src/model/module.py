@@ -51,15 +51,14 @@ class PredictMLP(nn.Module):
     '''
     def __init__(self, in_features, prediction_hidden_width, keep_prob):
         super().__init__()
-        self.dropout = nn.Dropout(p=1-keep_prob)
-        self.activate = nn.LeakyReLU()
         self.mlp = nn.Sequential()
-        i = 0
-        for width in prediction_hidden_width:
-            self.mlp.add_module(f"MLP_{i}", nn.Linear(in_features, width))
-            self.mlp.add_module(f"DropOut_{i}", self.dropout)
-            self.mlp.add_module(f"Activate_{i}", self.activate)
-            i += 1
+        for i in range(len(prediction_hidden_width)):
+            if i == 0:
+                self.mlp.add_module(f"MLP_{i}", nn.Linear(in_features, prediction_hidden_width[i]))
+            else:
+                self.mlp.add_module(f"MLP_{i}", nn.Linear(prediction_hidden_width[i - 1], prediction_hidden_width[i]))
+            self.mlp.add_module(f"Dropout_{i}", nn.Dropout(p=1-keep_prob))
+            self.mlp.add_module(f"Activate_{i}", nn.LeakyReLU())
     
     def forward(self, input):
         return self.mlp(input)
